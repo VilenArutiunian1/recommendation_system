@@ -1,0 +1,7 @@
+.env
+service_check.ipynb
+service.log
+venv/
+__pycache__/
+catboost_info/
+model.cbm

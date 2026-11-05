@@ -61,38 +61,6 @@ users, posts, feed = load_tables(postgres_engine())
 train_final_classifier(users, posts, feed)
 ```
 
-Загрузка лога и обучение требуют заметного объёма памяти и занимают около 10 минут (см. [model.ipynb](model.ipynb)).
-
-## Запуск сервиса
-
-1. Установить зависимости:
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
-
-2. Создать `.env` с доступом к базе:
-
-   ```
-   DB_USER=...
-   DB_PASSWORD=...
-   DB_HOST=...
-   DB_PORT=5432
-   DB_NAME=...
-   ```
-
-3. Положить обученную модель в `model.cbm` (файл не хранится в git) или указать путь через переменную `MODEL_PATH`.
-
-4. Запустить:
-
-   ```bash
-   uvicorn app:app --host 0.0.0.0 --port 8000
-   ```
-
-При старте сервис загружает модель, статистику по всем постам и тексты постов; после строки `Service is ready` в логе он готов принимать запросы.
-
 ## API
 
 ### `GET /health`

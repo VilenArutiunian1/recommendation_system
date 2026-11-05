@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
     model.load_model(MODEL_PATH)
 
     logger.info('Loading candidates')
-    app.state.recommender = Recommender(model, model.feature_names_, engine)
+    app.state.recommender = Recommender(model, model.feature_names_, engine, MODEL_PATH)
     app.state.posts = pd.read_sql('SELECT id, text, topic FROM public.post', engine).set_index('id')
 
     logger.info('Service is ready')

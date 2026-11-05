@@ -1,11 +1,12 @@
 import pandas as pd
+import joblib
 from sqlalchemy import text
 from ctr import K, add_post_ctr, add_user_ctr
 
 class Recommender:
     REFRESH_SECONDS = 24 * 60 * 60
 
-    def __init__(self, model, features, engine):
+    def __init__(self, model, features, engine, model_path='model.cbm'):
         self.engine = engine
         self.model = model
         self.features = features
@@ -14,6 +15,18 @@ class Recommender:
         self._load_user_ctr_prior()
         self.global_ctr: float | None = None
         self.candidates = self._load_candidates()
+        if any(name.startswith('post_bert_') for name in features):
+            from embeddings import BERT_FEATURES, add_post_embeddings
+
+            bert_features = [name for name in features if name.startswith('post_bert_')]
+            if bert_features != BERT_FEATURES:
+                raise ValueError('Модель обучена на других BERT-признаках, переобучите её')
+            posts = pd.read_sql(text('SELECT id AS post_id, text FROM public.post'), self.engine)
+            pca = joblib.load(f'{model_path}.bert.joblib')
+            if pca.n_components_ != len(BERT_FEATURES):
+                raise ValueError('PCA не соответствует модели, переобучите её')
+            posts, _ = add_post_embeddings(posts, pca)
+            self.candidates = self.candidates.merge(posts.drop(columns='text'), on='post_id')
 
 
     def _load_user_ctr_prior(self):

@@ -7,6 +7,7 @@ from ctr import add_user_ctr, add_post_ctr
 
 
 def build_dataset(users: DataFrame, posts: DataFrame, feed: DataFrame, split: bool = True, train_rows: int = 5_000_000) -> tuple[DataFrame, DataFrame | None]:
+    print(f'Считаем счётчики по {len(feed)} событиям', flush=True)
     # only the post topic is needed for counters: adding one column instead of two merges
     feed['post_topic'] = feed['post_id'].map(posts.set_index('post_id')['topic']).astype('category')
 
@@ -14,7 +15,7 @@ def build_dataset(users: DataFrame, posts: DataFrame, feed: DataFrame, split: bo
     feed = feed.sort_values(['timestamp', 'is_like'])
     feed['is_view'] = (feed['action'] == 'view').astype('int8')
 
-    # счётчики считаем по всей истории; int32 вместо int64 — вдвое меньше памяти на 65 млн строк
+    # счётчики считаем по загруженной истории; int32 вместо int64 — вдвое меньше памяти
     by_user_topic = feed.groupby(['user_id', 'post_topic'], observed=True)
     feed['user_topic_views'] = (by_user_topic['is_view'].cumsum() - feed['is_view']).astype('int32')
     feed['user_topic_likes'] = (by_user_topic['is_like'].cumsum() - feed['is_like']).astype('int32')
@@ -32,6 +33,7 @@ def build_dataset(users: DataFrame, posts: DataFrame, feed: DataFrame, split: bo
     feed['post_likes'] = (by_post['is_like'].cumsum() - feed['is_like']).astype('int32')
 
     # а обучаемся только на последних train_rows просмотрах
+    print('Готовим просмотры и целевую переменную', flush=True)
     views = feed[feed['action'] == 'view'].tail(train_rows)
     liked = feed.loc[feed['is_like'] == 1, ['user_id', 'post_id']].drop_duplicates()
     views = views.merge(liked.assign(target=1), on=['user_id', 'post_id'], how='left')
@@ -70,6 +72,7 @@ def build_dataset(users: DataFrame, posts: DataFrame, feed: DataFrame, split: bo
     }
     
     posts_info = posts.drop(columns='topic')
+    print('Добавляем признаки пользователей и постов', flush=True)
 
     def add_info(df: DataFrame) -> DataFrame:
         df = df.merge(users, on='user_id').merge(posts_info, on='post_id')
@@ -106,4 +109,5 @@ def build_dataset(users: DataFrame, posts: DataFrame, feed: DataFrame, split: bo
     if split:
         test = test.drop(columns=columns_to_drop)
 
+    print(f'Выборка готова: train — {len(train)}, test — {len(test) if test is not None else 0}', flush=True)
     return train, test

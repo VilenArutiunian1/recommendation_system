@@ -1,14 +1,16 @@
 import argparse
+import joblib
 from catboost import CatBoostClassifier, CatBoostRanker
 from database import load_tables
 from features import build_dataset
+from embeddings import BERT_FEATURES, add_post_embeddings
 from sklearn.metrics import roc_auc_score
 
 CAT_FEATURES = [
     'user_gender', 'user_country', 'user_city', 'user_exp_group', 'post_topic'
 ]
 NUM_FEATURES = ['user_age', 'topic_ctr', 'user_topic_ctr', 'user_topic_views', 'post_ctr', 'user_ctr', 'hour', 'weekday']
-FEATURES = CAT_FEATURES + NUM_FEATURES
+FEATURES = CAT_FEATURES + NUM_FEATURES + BERT_FEATURES
 
 CATBOOST_CLASSIFIER_ITERATIONS=500
 CATBOOST_CLASSIFIER_LEARNING_RATE=0.1
@@ -19,6 +21,7 @@ CATBOOST_RANKER_DEPTH=6
 
 
 def fit_classifier(df):
+    print(f'Начинаем обучение CatBoost на {len(df)} строках', flush=True)
     model = (
         CatBoostClassifier(
             iterations=CATBOOST_CLASSIFIER_ITERATIONS,
@@ -68,9 +71,11 @@ def group_auc(df, group_col='user_id', target_col='target', score_col='p'):
 
 
 def validate_classifier(users, posts, feed):
+    posts, _ = add_post_embeddings(posts)
     train_df, test_df = build_dataset(users, posts, feed)
     model = fit_classifier(train_df)
 
+    print('Считаем предсказания и метрики', flush=True)
     y_train_proba_pred = model.predict_proba(train_df[FEATURES])[:, 1]
     y_test_proba_pred = model.predict_proba(test_df[FEATURES])[:, 1]
 
@@ -97,9 +102,11 @@ def validate_classifier(users, posts, feed):
 
 
 def train_final_classifier(users, posts, feed):
+    posts, pca = add_post_embeddings(posts)
     full_df, _ = build_dataset(users, posts, feed, split=False)
     model = fit_classifier(full_df)
     # cbm - catboost model
     model.save_model('model.cbm')
+    joblib.dump(pca, 'model.cbm.bert.joblib')
     return model
 

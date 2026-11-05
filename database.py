@@ -20,9 +20,11 @@ def postgres_engine():
 
 
 FEED_CHUNK_ROWS = 1_000_000
+FEED_ROWS = 5_000_000
 
 
 def load_tables(engine):
+    print('Загружаем пользователей и посты', flush=True)
     with engine.connect() as connection:
         users = pd.read_sql(
             text("SELECT id AS user_id, gender, age, country, city, exp_group, os, source FROM public.user"),
@@ -30,15 +32,25 @@ def load_tables(engine):
         )
         posts = pd.read_sql(text("SELECT id AS post_id, text, topic FROM public.post"), connection)
 
-    # 65 млн строк одним pd.read_sql в память не влезут: читаем потоком кусками и сразу ужимаем типы
+    # последние события читаем кусками и сразу ужимаем типы
     action_type = pd.CategoricalDtype(['view', 'like'])
     chunks = []
+    i = 0
+    print(f'Загружаем последние {FEED_ROWS} событий feed', flush=True)
     with engine.connect().execution_options(stream_results=True) as connection:
         for chunk in pd.read_sql(
-            text("SELECT user_id, post_id, action, time AS timestamp FROM public.feed_action"),
+            text("""
+                SELECT user_id, post_id, action, time AS timestamp
+                FROM public.feed_action
+                ORDER BY time DESC
+                LIMIT :feed_rows
+            """),
             connection,
+            params={'feed_rows': FEED_ROWS},
             chunksize=FEED_CHUNK_ROWS,
         ):
+            print(f'Обработка {i}-ого chunk', flush=True)
+            i += 1
             chunks.append(chunk.astype({'user_id': 'int32', 'post_id': 'int32', 'action': action_type}))
     feed = pd.concat(chunks, ignore_index=True)
 
